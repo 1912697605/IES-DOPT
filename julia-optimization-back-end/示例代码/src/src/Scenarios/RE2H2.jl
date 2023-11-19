@@ -86,7 +86,7 @@ function optimization_RE2H2(data_GI::Vector,
 
     @named PV = PhotovoltaicCell(param_PV)   # 50万kW
     @named WT = WindTurbine(param_WT)   # 50万kW, 成本+逆变器
-    @named BAT = Battery(param_BAT) # 1e6 
+    @named BAT = Battery(param_BAT) # 1e6
     @named AEC = ElectrolyticCell(param_AEC) # 500000 kWh; 9000kg H2
     @named HT = CompressedH2Tank(param_HT) # 16万立方米 ~ 15000 kg
 
@@ -123,8 +123,14 @@ function optimization_RE2H2(data_GI::Vector,
     @named model = compose(ODESystem(eqs, t, name=:funs),
         [PV, WT, BAT, AEC, HT, GI, Ta, WS, H2L, ELBUS, H2BUS])
 
+		# @info "查看方程..."
+		# println(equations(model))
+
     @info "系统化简..."
     sys = structural_simplify(model)#dae_index_lowering(model))
+
+		# @info "查看化简方程..."
+    # println(equations(sys))
 
     @info "创建仿真..."
     prob = ODEProblem(sys, [], (0.0, length(data_H2L) - 1))
@@ -132,17 +138,17 @@ function optimization_RE2H2(data_GI::Vector,
 
     @info "创建优化..."
 
-    E_rated_device_components = [sol[PV.E_device_rated], 
-                                 sol[WT.E_device_rated], 
-                                 sol[AEC.E_device_rated], 
-                                 sol[HT.E_device_rated], 
+    E_rated_device_components = [sol[PV.E_device_rated],
+                                 sol[WT.E_device_rated],
+                                 sol[AEC.E_device_rated],
+                                 sol[HT.E_device_rated],
                                  0.05,#SoC
                                  sol[BAT.E_device_rated]]
 
     crf = cal_CRF(n_sys, r)
 
 
-    function obj_bl(opt_var_components::Array, optvars, E_rated_device_components,opt_var_lower_boundary,opt_var_upper_boundary; 
+    function obj_bl(opt_var_components::Array, optvars, E_rated_device_components,opt_var_lower_boundary,opt_var_upper_boundary;
         prob, H2BUS, H2L,
         n_sys, crf, cost_water_per_kg_H2,
         LHSP_thre, ar_RE_thre)
@@ -174,7 +180,7 @@ function optimization_RE2H2(data_GI::Vector,
     end
 
     #opt_var_components = [0,0,1,1,1] # PV,WT,AEC,HT,SoC_HT_cha_thre是否优化
-    optobj(optvars) = obj_bl(opt_var_components, optvars, E_rated_device_components,opt_var_lower_boundary,opt_var_upper_boundary; 
+    optobj(optvars) = obj_bl(opt_var_components, optvars, E_rated_device_components,opt_var_lower_boundary,opt_var_upper_boundary;
         prob, H2BUS, H2L,
         n_sys, crf, cost_water_per_kg_H2,
         LHSP_thre, ar_RE_thre)
@@ -188,17 +194,17 @@ function optimization_RE2H2(data_GI::Vector,
 
     # 调用bboptimize函数进行优化
 
-    res = bboptimize(optobj; SearchRange=(collect(zip(lower, upper))), 
+    res = bboptimize(optobj; SearchRange=(collect(zip(lower, upper))),
                      MaxTime=max_opt_time,
                      Method=:de_rand_2_bin)
 
-    # MaxSteps = 1e3)#, MaxRelativeFitnessChange = 1e-2) # 
+    # MaxSteps = 1e3)#, MaxRelativeFitnessChange = 1e-2) #
 
     #res = compare_optimizers(optobj; SearchRange = (collect(zip(lower,upper))), MaxTime = max_opt_time)
 
     # 打印优化结果摘要
     println(BlackBoxOptim.summary(res))
-    # 
+    #
     # 获取最优解和最优值
     xopt = best_candidate(res)
     fopt = best_fitness(res)
